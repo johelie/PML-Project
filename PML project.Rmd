@@ -1,0 +1,120 @@
+---
+title: "PML Project"
+author: "Jonathan Hélie"
+date: "15/11/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Library and seed
+
+```{r}
+library(caret)
+library(rattle)
+set.seed(1234567890)
+```
+
+## Loading data
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data (used for the quiz) are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r}
+data <- read.csv("D:/Documents/R Work Files/PML Week 4 project/pml-training.csv")
+quiz <- read.csv("D:/Documents/R Work Files/PML Week 4 project/pml-testing.csv")
+```
+
+## Data slicing
+
+Since the provided "testing" dataset doesn't include the outcome and is the subject of the quiz, I split the "training" dataset provided into 2 datasets, 1 for model training and the other one for testing/validation using the createDataPartition function.
+
+```{r}
+split <- createDataPartition(data$classe, times=1, p=0.7, list=FALSE)
+testing <- data[-split,]
+training <- data[split,]
+```
+
+## Data cleaning
+
+I have apply the following treatment to the data in order to keep only the most interesting variables :
+
+1. Remove the first 7 variables, because they are not movement related variables. They define the candidat, timestamp and more.
+2. Remove columns with a lot of NA (90% and more)
+3. Remove columns with a lot of missing values (90% and more)
+
+The results of those treatment is a dataset containing 52 variables and the outcome.
+
+```{r}
+training <- training[,-7:-1]
+training <- training[,colMeans(is.na(training))<0.9]
+training <- training[,colMeans(training=="")<0.9]
+```
+
+## Model training and testing
+
+In order to reduce the run time, I decided to change the Train function resampling method to K-fold with K equal to 5 parameters.
+
+```{r}
+trControl <- trainControl(method="cv", number=5)
+```
+
+I will try 3 type of models that could be appropriate for such a problem, where we have to predict a class, which are classification tree, random forest and gradient boosting.
+
+For each model, I will :
+1. Train it with the Train function, using the resampling method discuss previously and the training dataset
+2. Predict the testing dataset and assess the accuracy
+
+### Classification tree
+
+```{r}
+model1 <- train(classe ~ ., method = "rpart", data=training, trControl=trControl)
+model1pred <- predict(model1,newdata=testing)
+confMat1 <- confusionMatrix(testing$classe,model1pred)
+confMat1$overall[1]
+```
+
+With an accuracy of 49.7%, this model is clearly bad. Such a classification tree model is probably to simple for a complex problem like that with a lot of possible variables.
+
+
+### Random forest
+
+```{r}
+model2 <- train(classe ~ ., method = "rf", data=training, trControl=trControl)
+model2pred <- predict(model2,newdata=testing)
+confMat2 <- confusionMatrix(testing$classe,model2pred)
+confMat2$overall[1]
+```
+
+This model perform very well with an accuracy of 99.4% over the testing dataset.
+
+
+### Gradient boosting
+
+```{r}
+model3 <- train(classe ~ ., method = "gbm", data=training, trControl=trControl, verbose = FALSE)
+model3pred <- predict(model3,newdata=testing)
+confMat3 <- confusionMatrix(testing$classe,model3pred)
+confMat3$overall[1]
+```
+
+This model perform quite well with an accuracy of 96.0%, but is not as good as the random forest one.
+
+
+### Model selection
+
+With an accuracy of 99.4%, the random forest perform very well and is the selected model to go through the quiz.
+
+
+## Quiz prediction
+
+```{r}
+data.frame(number=quiz$X,answer=predict(model2,newdata=quiz))
+```
